@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Photo augmentée</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;700&display=swap">
+<style>
+  /* Chambre noire : fond graphite, accent lumière inactinique ambre. Une colonne, étapes empilées. */
+  :root {
+    --bg: #15171a;
+    --panel: #1e2125;
+    --line: #34383e;
+    --fg: #ece7df;
+    --muted: #9a958d;
+    --accent: #f0a640;
+    --accent-ink: #1b1305;
+    --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+    --font-body: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.55 var(--font-body);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .wrap {
+    max-width: 560px;
+    margin: 0 auto;
+    padding-block: 28px 48px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid;
+    gap: 22px;
+  }
+  .eyebrow {
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700;
+  }
+  h1 {
+    font-family: var(--font-display); font-weight: 400;
+    font-size: clamp(40px, 11vw, 56px); line-height: 1; margin: 6px 0 10px;
+    text-wrap: balance;
+  }
+  h1 em { color: var(--accent); }
+  .lead { color: var(--muted); margin: 0; max-width: 60ch; }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px;
+    display: grid; gap: 14px;
+  }
+  section h2 {
+    font-family: var(--font-display); font-weight: 400; font-size: 26px;
+    margin: 0; display: flex; align-items: baseline; gap: 10px;
+  }
+  section h2 span {
+    font-family: var(--font-body); font-size: 12px; color: var(--accent);
+    letter-spacing: .12em; text-transform: uppercase; font-weight: 700;
+  }
+  label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+  input[type=text], textarea {
+    font: inherit; color: var(--fg); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%;
+  }
+  textarea { min-height: 96px; resize: vertical; }
+  input:focus-visible, textarea:focus-visible, button:focus-visible, .file:focus-within {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  .file {
+    display: flex; align-items: center; gap: 12px;
+    border: 1px dashed var(--line); border-radius: 10px; padding: 12px;
+    cursor: pointer; color: var(--fg); position: relative;
+  }
+  .file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .file .name { color: var(--muted); font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+  .thumb {
+    width: 100%; max-height: 260px; object-fit: contain; border-radius: 8px;
+    background: var(--bg);
+  }
+  .checks { display: grid; gap: 10px; }
+  .check { display: flex; align-items: center; gap: 10px; color: var(--fg); font-size: 15px; }
+  .check input { width: 20px; height: 20px; accent-color: var(--accent); }
+  .hint { font-size: 13px; color: var(--muted); margin: 0; }
+  button.main {
+    font: 700 16px var(--font-body); color: var(--accent-ink); background: var(--accent);
+    border: 0; border-radius: 12px; padding: 15px 18px; cursor: pointer; width: 100%;
+  }
+  button.main:disabled { opacity: .45; cursor: not-allowed; }
+  .progress { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .status { font-size: 14px; color: var(--muted); margin: 0; font-variant-numeric: tabular-nums; }
+  .status.error { color: #ff8d7a; }
+  ol.how { margin: 0; padding-left: 20px; color: var(--muted); display: grid; gap: 4px; }
+
+  /* Vue caméra */
+  #ar { position: fixed; inset: 0; background: #000; overflow: hidden; z-index: 5; }
+  #ar-stage { position: absolute; inset: 0; }
+  #ar-bar {
+    position: absolute; z-index: 10; left: 0; right: 0;
+    top: 0;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px));
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    background: linear-gradient(#000a, #0000);
+  }
+  #ar-bar button {
+    font: 700 14px var(--font-body); color: var(--fg); background: #0008;
+    border: 1px solid #fff3; border-radius: 99px; padding: 9px 14px; cursor: pointer;
+  }
+  #ar-tip { font-size: 13px; color: #fffc; text-align: right; }
+  .mindar-ui-overlay { position: fixed !important; z-index: 8 !important; pointer-events: none; }
+  @media (prefers-reduced-motion: reduce) { .progress i { transition: none; } }
+</style>
+</head>
+<body>
+<main class="wrap" id="setup">
+  <header>
+    <div class="eyebrow">Prototype · réalité augmentée</div>
+    <h1>La photo qui <em>s'éveille</em></h1>
+    <p class="lead">Choisis une photo, ajoute son histoire, puis vise-la avec la caméra du téléphone. Les informations et les effets apparaissent par-dessus l'image.</p>
+  </header>
+
+  <section>
+    <h2><span>Étape 1</span>La photo</h2>
+    <label class="file" for="photo">
+      <input type="file" id="photo" accept="image/*">
+      <strong>Choisir une photo</strong>
+      <span class="name" id="photo-name">Aucune photo choisie</span>
+    </label>
+    <img id="thumb" class="thumb" alt="Aperçu de la photo choisie" hidden>
+    <p class="hint">Les photos riches en détails sont mieux reconnues que les grands aplats (ciel uni, brouillard).</p>
+  </section>
+
+  <section>
+    <h2><span>Étape 2</span>Son histoire</h2>
+    <label for="title">Titre
+      <input type="text" id="title" value="Lumière d'hiver">
+    </label>
+    <label for="meta">Lieu et date
+      <input type="text" id="meta" value="Baie de Somme · janvier 2025">
+    </label>
+    <label for="body">Texte
+      <textarea id="body">(Exemple) J'ai attendu près d'une heure que le brouillard se lève. Quand le soleil a percé, il ne restait que quelques secondes avant que la marée ne recouvre tout.</textarea>
+    </label>
+  </section>
+
+  <section>
+    <h2><span>Étape 3</span>Les effets</h2>
+    <div class="checks">
+      <label class="check" for="fx-frame"><input type="checkbox" id="fx-frame" checked> Cadre de lumière qui se dessine</label>
+      <label class="check" for="fx-dust"><input type="checkbox" id="fx-dust" checked> Poussière dorée qui s'échappe de la photo</label>
+      <label class="check" for="fx-card"><input type="checkbox" id="fx-card" checked> Cartel d'information sous la photo</label>
+    </div>
+    <label class="file" for="video">
+      <input type="file" id="video" accept="video/*">
+      <strong>Vidéo (facultatif)</strong>
+      <span class="name" id="video-name">Pour faire « vivre » la photo</span>
+    </label>
+    <label class="file" for="audio">
+      <input type="file" id="audio" accept="audio/*">
+      <strong>Son (facultatif)</strong>
+      <span class="name" id="audio-name">La voix de la photographe, une ambiance</span>
+    </label>
+  </section>
+
+  <section>
+    <h2><span>Étape 4</span>Essayer</h2>
+    <ol class="how">
+      <li>Affiche la photo en grand sur un écran d'ordinateur, ou imprime-la.</li>
+      <li>Appuie sur « Préparer », puis « Lancer la caméra ».</li>
+      <li>Vise la photo en entier avec le téléphone.</li>
+    </ol>
+    <button class="main" id="prepare" disabled>Préparer l'expérience</button>
+    <div class="progress" hidden id="progress"><i id="bar"></i></div>
+    <p class="status" id="status">Choisis d'abord une photo.</p>
+    <button class="main" id="start" hidden>Lancer la caméra</button>
+  </section>
+</main>
+
+<div id="ar" hidden>
+  <div id="ar-stage"></div>
+  <div id="ar-bar">
+    <button id="back">Retour</button>
+    <span id="ar-tip">Vise la photo en entier</span>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+    "mindar-image": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js",
+    "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+  }
+}
+</script>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const state = { image: null, aspect: 1, targetUrl: null, videoUrl: null, audioUrl: null, mindar: null };
+
+// Mémorise les textes saisis (confort uniquement).
+for (const id of ["title", "meta", "body"]) {
+  try { const v = localStorage.getItem("ar-" + id); if (v !== null) $(id).value = v; } catch {}
+  $(id).addEventListener("input", () => { try { localStorage.setItem("ar-" + id, $(id).value); } catch {} });
+}
+
+function setStatus(msg, isError = false) {
+  $("status").textContent = msg;
+  $("status").classList.toggle("error", isError);
+}
+
+// Étape 1 : photo réduite à 1000 px max (plus rapide à préparer, reconnaissance identique).
+$("photo").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  $("photo-name").textContent = file.name;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  const scale = Math.min(1, 1000 / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement("canvas");
+  c.width = Math.round(img.naturalWidth * scale);
+  c.height = Math.round(img.naturalHeight * scale);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  state.image = c;
+  state.aspect = c.height / c.width;
+  state.targetUrl = null;
+  $("thumb").src = url;
+  $("thumb").hidden = false;
+  $("prepare").disabled = false;
+  $("start").hidden = true;
+  setStatus("Photo prête. Appuie sur « Préparer l'expérience ».");
+});
+
+for (const [id, key, nameId] of [["video", "videoUrl", "video-name"], ["audio", "audioUrl", "audio-name"]]) {
+  $(id).addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    state[key] = URL.createObjectURL(file);
+    $(nameId).textContent = file.name;
+  });
+}
+
+// Étape 4a : le téléphone apprend à reconnaître la photo.
+$("prepare").addEventListener("click", async () => {
+  $("prepare").disabled = true;
+  $("progress").hidden = false;
+  setStatus("Chargement de l'outil de reconnaissance…");
+  try {
+    const { Compiler } = await import("mindar-image");
+    const compiler = new Compiler();
+    setStatus("Analyse de la photo… 0 %");
+    await compiler.compileImageTargets([state.image], (p) => {
+      $("bar").style.width = Math.min(100, p) + "%";
+      setStatus("Analyse de la photo… " + Math.round(Math.min(100, p)) + " %");
+    });
+    const data = await compiler.exportData();
+    state.targetUrl = URL.createObjectURL(new Blob([data]));
+    setStatus("Prêt. Lance la caméra et vise la photo.");
+    $("start").hidden = false;
+  } catch (err) {
+    console.error(err);
+    setStatus("La préparation a échoué. Essaie une autre photo ou recharge la page.", true);
+  } finally {
+    $("prepare").disabled = false;
+  }
+});
+
+// ---------- Scène de réalité augmentée ----------
+function roundDot() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d");
+  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, "rgba(255,240,210,1)");
+  grd.addColorStop(0.35, "rgba(255,190,90,.65)");
+  grd.addColorStop(1, "rgba(255,170,60,0)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 64, 64);
+  return c;
+}
+
+function wrapLines(ctx, text, maxWidth) {
+  const out = [];
+  for (const para of text.split("\n")) {
+    let line = "";
+    for (const word of para.split(/\s+/)) {
+      const test = line ? line + " " + word : word;
+      if (ctx.measureText(test).width > maxWidth && line) { out.push(line); line = word; }
+      else line = test;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+function drawCard(THREE) {
+  const W = 1024, pad = 56, inner = W - pad * 2;
+  const c = document.createElement("canvas");
+  const g = c.getContext("2d");
+  const title = $("title").value.trim();
+  const meta = $("meta").value.trim().toUpperCase();
+  const body = $("body").value.trim();
+  g.font = "400 76px 'Instrument Serif', Georgia, serif";
+  const tLines = wrapLines(g, title, inner);
+  g.font = "400 32px Manrope, system-ui, sans-serif";
+  const bLines = wrapLines(g, body, inner);
+  const H = pad + tLines.length * 80 + 18 + 40 + 26 + bLines.length * 46 + pad;
+  c.width = W; c.height = H;
+  g.fillStyle = "rgba(21,23,26,0.86)";
+  g.beginPath(); g.roundRect(0, 0, W, H, 28); g.fill();
+  g.fillStyle = "#f0a640"; g.fillRect(pad, pad - 18, 64, 4);
+  let y = pad + 62;
+  g.fillStyle = "#ece7df"; g.font = "400 76px 'Instrument Serif', Georgia, serif";
+  for (const l of tLines) { g.fillText(l, pad, y); y += 80; }
+  y += 6;
+  g.fillStyle = "#f0a640"; g.font = "700 26px Manrope, system-ui, sans-serif";
+  if ("letterSpacing" in g) g.letterSpacing = "4px";
+  g.fillText(meta, pad, y);
+  if ("letterSpacing" in g) g.letterSpacing = "0px";
+  y += 58;
+  g.fillStyle = "#d8d2c8"; g.font = "400 32px Manrope, system-ui, sans-serif";
+  for (const l of bLines) { g.fillText(l, pad, y); y += 46; }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return { tex, aspect: H / W };
+}
+
+async function buildScene(THREE, group) {
+  const h = state.aspect; // largeur de la photo = 1 unité
+  const fx = { frame: $("fx-frame").checked, dust: $("fx-dust").checked, card: $("fx-card").checked };
+  const parts = {};
+
+  if (fx.frame) {
+    const mat = new THREE.MeshBasicMaterial({ color: 0xf0a640, transparent: true, opacity: 0.95, depthTest: false });
+    const t = 0.012;
+    const mk = (w, hh, x, y) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, hh), mat);
+      m.position.set(x, y, 0.002); group.add(m); return m;
+    };
+    parts.frame = {
+      mat,
+      top: mk(1 + t, t, 0, h / 2), bottom: mk(1 + t, t, 0, -h / 2),
+      left: mk(t, h + t, -0.5, 0), right: mk(t, h + t, 0.5, 0),
+    };
+  }
+
+  if (state.videoUrl) {
+    const v = document.createElement("video");
+    v.src = state.videoUrl; v.loop = true; v.muted = true; v.playsInline = true;
+    v.setAttribute("playsinline", ""); v.crossOrigin = "anonymous";
+    await new Promise((r) => { v.onloadedmetadata = r; v.onerror = r; });
+    const tex = new THREE.VideoTexture(v);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    // Recadrage façon « cover » pour épouser le format de la photo.
+    const va = (v.videoHeight || 1) / (v.videoWidth || 1);
+    if (va > h) { tex.repeat.set(1, h / va); tex.offset.set(0, (1 - h / va) / 2); }
+    else { tex.repeat.set(va / h, 1); tex.offset.set((1 - va / h) / 2, 0); }
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthTest: false });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, h), mat);
+    mesh.position.z = 0.001; group.add(mesh);
+    parts.video = { el: v, mat };
+  }
+
+  if (fx.dust) {
+    const N = 260;
+    const pos = new Float32Array(N * 3), vel = new Float32Array(N * 3), life = new Float32Array(N);
+    const reset = (i, initial) => {
+      pos[i * 3] = (Math.random() - 0.5);
+      pos[i * 3 + 1] = (Math.random() - 0.5) * h;
+      pos[i * 3 + 2] = 0;
+      vel[i * 3] = (Math.random() - 0.5) * 0.03;
+      vel[i * 3 + 1] = 0.02 + Math.random() * 0.05;
+      vel[i * 3 + 2] = 0.05 + Math.random() * 0.12;
+      life[i] = initial ? Math.random() * 4 : 0;
+    };
+    for (let i = 0; i < N; i++) reset(i, true);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({
+      size: 0.035, map: new THREE.CanvasTexture(roundDot()), transparent: true, opacity: 0,
+      depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+    });
+    const pts = new THREE.Points(geo, mat);
+    group.add(pts);
+    parts.dust = { geo, mat, pos, vel, life, reset, N };
+  }
+
+  if (fx.card) {
+    const { tex, aspect } = drawCard(THREE);
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthTest: false });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, aspect), mat);
+    mesh.position.set(0, -h / 2 - aspect / 2 - 0.06, 0.004);
+    group.add(mesh);
+    parts.card = { mesh, mat, baseY: mesh.position.y };
+  }
+
+  if (state.audioUrl) {
+    const a = new Audio(state.audioUrl);
+    a.loop = false;
+    parts.audio = a;
+  }
+  return parts;
+}
+
+const ease = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
+
+$("start").addEventListener("click", async () => {
+  $("start").disabled = true;
+  setStatus("Ouverture de la caméra…");
+  // Débloque le son et la vidéo pendant le geste de l'utilisateur (exigence des téléphones).
+  let audioPrimed = null;
+  if (state.audioUrl) { audioPrimed = new Audio(state.audioUrl); audioPrimed.muted = true; audioPrimed.play().then(() => audioPrimed.pause()).catch(() => {}); }
+  try {
+    const THREE = await import("three");
+    const { MindARThree } = await import("mindar-image-three");
+    await document.fonts.ready;
+    $("ar").hidden = false;
+    $("setup").hidden = true;
+    $("ar-stage").innerHTML = "";
+    const mindar = new MindARThree({
+      container: $("ar-stage"), imageTargetSrc: state.targetUrl,
+      filterMinCF: 0.0001, filterBeta: 0.001, uiScanning: "yes", uiLoading: "yes",
+    });
+    state.mindar = mindar;
+    const { renderer, scene, camera } = mindar;
+    const anchor = mindar.addAnchor(0);
+    const parts = await buildScene(THREE, anchor.group);
+    if (audioPrimed && parts.audio) { parts.audio = audioPrimed; parts.audio.muted = false; parts.audio.currentTime = 0; }
+
+    let foundAt = null;
+    anchor.onTargetFound = () => {
+      foundAt = performance.now();
+      $("ar-tip").textContent = "Photo reconnue";
+      if (parts.video) { parts.video.el.currentTime = 0; parts.video.el.play().catch(() => {}); }
+      if (parts.audio) { parts.audio.play().catch(() => {}); }
+    };
+    anchor.onTargetLost = () => {
+      foundAt = null;
+      $("ar-tip").textContent = "Vise la photo en entier";
+      if (parts.video) parts.video.el.pause();
+      if (parts.audio) parts.audio.pause();
+    };
+
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let last = performance.now();
+    await mindar.start();
+    renderer.setAnimationLoop(() => {
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const t = foundAt === null ? 0 : (now - foundAt) / 1000;
+      const k = (start, dur) => reduce ? 1 : ease((t - start) / dur);
+
+      if (parts.frame) {
+        const f = parts.frame, p = k(0, 0.9);
+        f.top.scale.x = f.bottom.scale.x = Math.max(0.001, p);
+        f.left.scale.y = f.right.scale.y = Math.max(0.001, p);
+        f.mat.opacity = 0.35 + 0.6 * (0.5 + 0.5 * Math.sin(now / 500)) * p;
+      }
+      if (parts.video) parts.video.mat.opacity = k(0.6, 1.2);
+      if (parts.card) {
+        const p = k(0.9, 0.8);
+        parts.card.mat.opacity = p;
+        parts.card.mesh.position.y = parts.card.baseY - (1 - p) * 0.12;
+      }
+      if (parts.dust) {
+        const d = parts.dust;
+        d.mat.opacity = 0.9 * k(0.3, 1);
+        if (foundAt !== null && !reduce) {
+          for (let i = 0; i < d.N; i++) {
+            d.life[i] += dt;
+            if (d.life[i] > 4) d.reset(i, false);
+            d.pos[i * 3] += d.vel[i * 3] * dt;
+            d.pos[i * 3 + 1] += d.vel[i * 3 + 1] * dt;
+            d.pos[i * 3 + 2] += d.vel[i * 3 + 2] * dt;
+          }
+          d.geo.attributes.position.needsUpdate = true;
+        }
+      }
+      renderer.render(scene, camera);
+    });
+    setStatus("Prêt. Lance la caméra et vise la photo.");
+  } catch (err) {
+    console.error(err);
+    try { state.mindar?.ui.hideLoading(); state.mindar?.ui.hideScanning(); } catch {}
+    $("ar").hidden = true;
+    $("setup").hidden = false;
+    setStatus("Impossible d'ouvrir la caméra. Autorise l'accès à la caméra dans le navigateur, puis réessaie.", true);
+  } finally {
+    $("start").disabled = false;
+  }
+});
+
+$("back").addEventListener("click", () => {
+  const m = state.mindar;
+  if (m) {
+    try { m.renderer.setAnimationLoop(null); m.stop(); } catch {}
+    try { m.ui.hideScanning(); m.ui.hideLoading(); } catch {}
+    state.mindar = null;
+  }
+  document.querySelectorAll("video, audio").forEach((el) => { try { el.pause(); } catch {} });
+  $("ar-stage").innerHTML = "";
+  $("ar").hidden = true;
+  $("setup").hidden = false;
+});
+</script>
+</body>
+</html>
